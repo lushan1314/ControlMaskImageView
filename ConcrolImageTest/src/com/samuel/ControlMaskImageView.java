@@ -1,6 +1,5 @@
 package com.samuel;
 
-
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -10,6 +9,7 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PointF;
 import android.graphics.RectF;
+import android.support.v4.view.MotionEventCompat;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -23,6 +23,8 @@ import android.view.ViewGroup;
  *
  */
 public class ControlMaskImageView extends View {
+
+	private static final int INVALID_POINTER = -1;
 
 	private static final int NONE = 0;
 	//拖动，改变大小和角度， 中心点不变
@@ -45,6 +47,7 @@ public class ControlMaskImageView extends View {
 
 	private Bitmap mContentBitmap, mCloseBitmap, mDragBitmap;
 
+	private int mActivePointerId = INVALID_POINTER;
 	private float mLastX, mLastY;
 	private float mCenterX, mCenterY;
 	/**
@@ -166,12 +169,17 @@ public class ControlMaskImageView extends View {
 	}
 
 	public boolean onTouchEvent(MotionEvent event) {
-		switch (event.getAction() & MotionEvent.ACTION_MASK) {
-		case MotionEvent.ACTION_DOWN:
+
+		final int action = MotionEventCompat.getActionMasked(event);
+
+		switch (action) {
+		case MotionEvent.ACTION_DOWN: {
 			mIsTouchMode = true;
 			mCurrentMode = NONE;
-			mLastX = event.getX();
-			mLastY = event.getY();
+			final int pointerIndex = MotionEventCompat.getActionIndex(event);
+			mLastX = MotionEventCompat.getX(event, pointerIndex);
+			mLastY = MotionEventCompat.getY(event, pointerIndex);
+			mActivePointerId = MotionEventCompat.getPointerId(event, pointerIndex);
 			mCenterX = mContentDstRect.centerX();
 			mCenterY = mContentDstRect.centerY();
 			Log.e("simon", "centerX>>" + mCenterX + "  centerY" + mCenterY);
@@ -188,9 +196,17 @@ public class ControlMaskImageView extends View {
 			} else {//不在范围内
 				mCurrentMode = OUTSIDE;
 			}
-		case MotionEvent.ACTION_MOVE:
+		}
+		case MotionEvent.ACTION_MOVE: {
+			
+			final int pointerIndex = MotionEventCompat.getActionIndex(event);
+			int activePointerId = MotionEventCompat.getPointerId(event, pointerIndex);
+			Log.e("simon", "activePointerId>>" + activePointerId + ">>mActivePointerId>>" + mActivePointerId);
+			if (activePointerId == INVALID_POINTER||activePointerId!=mActivePointerId) {
+				break;
+			}
+			
 			if (mCurrentMode == DRAG) {
-				Log.e("simon", "mContentDstRect>>" + mContentDstRect.toString());
 				PointF lastPoint = new PointF(mLastX, mLastY);
 				PointF currentPoint = new PointF(event.getX(), event.getY());
 				float scale = getScale(mOriginPoint, lastPoint, currentPoint);
@@ -205,13 +221,20 @@ public class ControlMaskImageView extends View {
 				matrixCheck();
 				invalidate();
 			}
-			mLastX = event.getX();
-			mLastY = event.getY();
+
+			if (pointerIndex >= 0) {
+				mLastX = MotionEventCompat.getX(event, pointerIndex);
+				mLastY = MotionEventCompat.getY(event, pointerIndex);
+			}
 			break;
-		case MotionEvent.ACTION_UP:
+		}
+		case MotionEvent.ACTION_UP: {
+			mActivePointerId = INVALID_POINTER;
+			Log.e("simon", "mActivePointerId>>" + mActivePointerId );
 			mIsTouchMode = false;
 			invalidate();
 			break;
+		}
 		}
 		return true;
 	}
@@ -370,13 +393,22 @@ public class ControlMaskImageView extends View {
 	//	// 将移动，缩放以及旋转后的图层保存为新图片
 	//	// 本例中沒有用到該方法，需要保存圖片的可以參考
 	//	public Bitmap CreatNewPhoto() {
-	//		Bitmap bitmap = Bitmap.createBitmap(widthScreen, heightScreen, Config.ARGB_8888); // 背景图片
-	//		Canvas canvas = new Canvas(bitmap); // 新建画布
-	//		canvas.drawBitmap(mContentBitmap, matrix, null); // 画图片
-	//		canvas.save(Canvas.ALL_SAVE_FLAG); // 保存画布
-	//		canvas.restore();
-	//		return bitmap;
+	//			Bitmap bitmap = Bitmap.c.createBitmap(widthScreen, heightScreen, Config.ARGB_8888); // 背景图片
+	//			Canvas canvas = new Canvas(bitmap); // 新建画布
+	//			canvas.drawBitmap(mContentBitmap, matrix, null); // 画图片
+	//			canvas.save(Canvas.ALL_SAVE_FLAG); // 保存画布
+	//			canvas.restore();
+	//			return bitmap;
 	//	}
+
+	public Bitmap getMaskPhoto(Bitmap bgBitmap) {
+		Canvas canvas = new Canvas(bgBitmap); // 新建画布
+		canvas.drawBitmap(mContentBitmap, mMatrix, null); // 画图片
+		canvas.save(Canvas.ALL_SAVE_FLAG); // 保存画布
+		canvas.restore();
+		return bgBitmap;
+	}
+
 	//
 	//	public boolean isInsideContent(float pointX, float pointY) {
 	//
